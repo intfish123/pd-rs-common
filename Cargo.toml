@@ -1,9 +1,19 @@
 [package]
 name = "pd-rs-common"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+authors = [
+    "intfish123 <intfish@qq.com>",
+]
+description = "Rust common lib"
+documentation = "https://docs.rs/pd-rs-common"
+repository = "https://github.com/intfish123/pd-rs-common"
+readme = "README.md"
+keywords = ["rust", "common", "nacos"]
+license = "MIT"
 
-[lib]
+[badges]
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 tracing = "0.1"
