@@ -17,12 +17,12 @@ use std::sync::{Arc, RwLock};
 
 #[derive(Debug)]
 pub struct NacosNamingAndConfigData {
-    naming: NamingService,
-    config: ConfigService,
+    pub naming: NamingService,
+    pub config: ConfigService,
 
     state: RwLock<NamingState>,
 
-    event_listener: Arc<NacosEventListener>,
+    pub event_listener: Arc<NacosEventListener>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -34,9 +34,9 @@ pub struct NacosEventListener {
 
 #[derive(Clone, Debug, Default)]
 pub struct NamingState {
-    service_name: String,
-    group_name: Option<String>,
-    service_instance: Vec<ServiceInstance>,
+    pub service_name: String,
+    pub group_name: Option<String>,
+    pub service_instance: Vec<ServiceInstance>,
 }
 
 impl NacosNamingAndConfigData {
