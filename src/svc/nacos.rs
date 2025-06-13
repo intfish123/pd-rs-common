@@ -270,7 +270,7 @@ impl NamingEventListener for NacosEventListener {
         let inst_list = event.instances.clone().unwrap_or_default();
         self.sub_svc_map
             .insert(event.service_name.clone(), inst_list);
-        self.sub_svc_change_sender.try_broadcast(event);
+        let _ = self.sub_svc_change_sender.try_broadcast(event);
     }
 }
 
@@ -280,6 +280,6 @@ impl ConfigChangeListener for NacosEventListener {
         self.config_data_map
             .insert(config_resp.data_id().clone(), config_resp.clone());
         
-        self.config_change_sender.try_broadcast(config_resp);
+        let _ = self.config_change_sender.try_broadcast(config_resp);
     }
 }
