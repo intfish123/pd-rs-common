@@ -25,11 +25,15 @@ pub struct NacosNamingAndConfigData {
     pub event_listener: Arc<NacosEventListener>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct NacosEventListener {
     pub sub_svc_map: DashMap<String, Vec<ServiceInstance>>,
+    pub sub_svc_change_sender: async_broadcast::Sender<Arc<NamingChangeEvent>>,
+    pub sub_svc_change_receiver: async_broadcast::Receiver<Arc<NamingChangeEvent>>,
 
     pub config_data_map: DashMap<String, ConfigResponse>,
+    pub config_change_sender: async_broadcast::Sender<ConfigResponse>,
+    pub config_change_receiver: async_broadcast::Receiver<ConfigResponse>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -97,6 +101,20 @@ impl NacosNamingAndConfigData {
             config_service = ConfigServiceBuilder::new(client_props).build()?;
         }
 
+        let (mut sub_svc_s, sub_svc_r) = async_broadcast::broadcast(100);
+        sub_svc_s.set_overflow(true);
+
+        let (mut config_s, config_r) = async_broadcast::broadcast(100);
+        config_s.set_overflow(true);
+        
+        let nel = NacosEventListener{
+            sub_svc_map: DashMap::default(),
+            sub_svc_change_sender: sub_svc_s,
+            sub_svc_change_receiver: sub_svc_r,
+            config_data_map: DashMap::default(),
+            config_change_sender: config_s,
+            config_change_receiver: config_r,
+        };
         Ok(NacosNamingAndConfigData {
             naming: naming_service,
             config: config_service,
@@ -105,7 +123,7 @@ impl NacosNamingAndConfigData {
                 group_name: None,
                 service_instance: Vec::new(),
             }),
-            event_listener: Arc::new(NacosEventListener::default()),
+            event_listener: Arc::new(nel),
         })
     }
 
@@ -252,6 +270,7 @@ impl NamingEventListener for NacosEventListener {
         let inst_list = event.instances.clone().unwrap_or_default();
         self.sub_svc_map
             .insert(event.service_name.clone(), inst_list);
+        self.sub_svc_change_sender.try_broadcast(event);
     }
 }
 
@@ -259,6 +278,8 @@ impl ConfigChangeListener for NacosEventListener {
     fn notify(&self, config_resp: ConfigResponse) {
         tracing::info!("config change event={:?}", config_resp.clone());
         self.config_data_map
-            .insert(config_resp.data_id().clone(), config_resp);
+            .insert(config_resp.data_id().clone(), config_resp.clone());
+        
+        self.config_change_sender.try_broadcast(config_resp);
     }
 }
