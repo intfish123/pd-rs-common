@@ -67,7 +67,7 @@ impl NacosNamingAndConfigData {
         let mut client_props = ClientProps::new()
             // eg. "127.0.0.1:8848"
             .server_addr(server_addr)
-            .namespace(namespace)
+            .namespace(if namespace.to_lowercase() == "public" {""} else {namespace.as_str()})
             .app_name(app_name.clone());
 
         let mut enable_http_login = false;
@@ -210,15 +210,24 @@ impl NacosNamingAndConfigData {
         &self,
         data_id: String,
         group_name: String,
+        listener: Arc<dyn ConfigChangeListener>,
     ) -> Result<()> {
         let config_service = self.config.clone();
         let _listen = config_service
-            .add_listener(data_id, group_name, self.event_listener.clone())
+            .add_listener(data_id, group_name, listener)
             .await;
         match _listen {
             Ok(_) => Ok(()),
             Err(err) => Err(anyhow!("listen config error {:?}", err)),
         }
+    }
+
+    pub async fn add_default_config_listener(
+        &self,
+        data_id: String,
+        group_name: String,
+    ) -> Result<()> {
+        self.add_config_listener(data_id, group_name, self.event_listener.clone()).await
     }
 
     pub async fn get_config(
