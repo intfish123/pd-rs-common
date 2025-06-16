@@ -1205,7 +1205,7 @@ dependencies = [
 
 [[package]]
 name = "pd-rs-common"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "async-broadcast",
