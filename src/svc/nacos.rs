@@ -1,4 +1,4 @@
-//! nacos服务注册与发现
+//! nacos discover and configuration
 
 use anyhow::{anyhow, Result};
 use dashmap::DashMap;
@@ -66,8 +66,6 @@ impl NacosNamingAndConfigData {
         user_name: Option<String>,
         password: Option<String>,
     ) -> Result<Self> {
-        // 因为它内部会初始化与服务端的长链接，后续的数据交互及变更订阅，都是实时地通过长链接告知客户端的。
-
         let mut client_props = ClientProps::new()
             // eg. "127.0.0.1:8848"
             .server_addr(server_addr)
@@ -128,46 +126,56 @@ impl NacosNamingAndConfigData {
     }
 
 
-    /// 向nacos注册自己
+    /// register self to nacos
     pub async fn register_service(
         &self,
         service_name: String,
         service_port: i32,
+        service_ip: Option<String>,
+        group_name: Option<String>,
         service_metadata: HashMap<String, String>,
     ) -> Result<Vec<ServiceInstance>> {
-        // 请注意！一般情况下，应用下仅需一个 Naming 客户端，而且需要长期持有直至应用停止。
-        // 因为它内部会初始化与服务端的长链接，后续的数据交互及变更订阅，都是实时地通过长链接告知客户端的。
-
-        // 注册服务
-        let local_ip = local_ip_address::local_ip()?;
+        
+        let mut tmp_ip ="127.0.0.1".to_string();
+        if let Some(ip) = service_ip {
+            tmp_ip = ip;
+        } else {
+            let local_ip = local_ip_address::local_ip()?;
+            tmp_ip = local_ip.to_string();
+        }
+       
         let svc_inst = ServiceInstance {
-            ip: local_ip.to_string(),
+            ip: tmp_ip.clone(),
             port: service_port,
             metadata: service_metadata,
             ..Default::default()
         };
 
-        let group_name = Some(constants::DEFAULT_GROUP.to_string());
+        
+        let mut tmp_group = Some(constants::DEFAULT_GROUP.to_string());
+        if let Some(gn) = group_name {
+            tmp_group = Some(gn);
+        }
 
         let _register_inst_ret = self
             .naming
-            .register_instance(service_name.clone(), group_name.clone(), svc_inst.clone())
+            .register_instance(service_name.clone(), tmp_group.clone(), svc_inst.clone())
             .await;
         match _register_inst_ret {
             Ok(_) => {
                 tracing::info!(
-                "Register service {}@{} to nacos successfully",
+                "register service {}@{} to nacos successfully",
                 service_name.clone(),
-                local_ip.to_string()
+                tmp_ip.clone()
             );
-                self.update_state(service_name, group_name, vec![svc_inst.clone()]);
+                self.update_state(service_name, tmp_group, vec![svc_inst.clone()]);
                 Ok(vec![svc_inst])
             }
             Err(e) => {
                 tracing::error!(
-                "Failed to register service {}@{} to nacos: {}",
+                "failed to register service {}@{} to nacos: {}",
                 service_name.clone(),
-                local_ip.to_string(),
+                tmp_ip.to_string(),
                 e
             );
                 Err(anyhow!(e))
@@ -175,8 +183,8 @@ impl NacosNamingAndConfigData {
         }
     }
 
-    /// 从nacos注销
-    pub async fn unregister_service(&self) -> Result<()> {
+    /// deregister self from nacos
+    pub async fn deregister_service(&self) -> Result<()> {
         let state = self.get_state();
         let service_name = state.service_name;
         let group_name = state.group_name;
@@ -199,11 +207,11 @@ impl NacosNamingAndConfigData {
 
         if !errors.is_empty() {
             Err(anyhow!(
-            "Failed to deregister instances: {}",
+            "failed to deregister instances: {}",
             errors.join(", ")
         ))
         } else {
-            tracing::info!("Deregister instances: {}", insts.join(", "));
+            tracing::info!("deregister instances: {}", insts.join(", "));
             Ok(())
         }
     }
@@ -259,14 +267,14 @@ impl NacosNamingAndConfigData {
             .await;
         match ret {
             Ok(config) => Ok(config.content().clone()),
-            Err(err) => Err(anyhow!("Failed to get config: {}", err)),
+            Err(err) => Err(anyhow!("failed to get config: {}", err)),
         }
     }
 }
 
 impl NamingEventListener for NacosEventListener {
     fn event(&self, event: Arc<NamingChangeEvent>) {
-        tracing::info!("subscriber notify event={:?}", event.clone());
+        tracing::debug!("subscriber notify event={:?}", event.clone());
         let inst_list = event.instances.clone().unwrap_or_default();
         self.sub_svc_map
             .insert(event.service_name.clone(), inst_list);
@@ -276,7 +284,7 @@ impl NamingEventListener for NacosEventListener {
 
 impl ConfigChangeListener for NacosEventListener {
     fn notify(&self, config_resp: ConfigResponse) {
-        tracing::info!("config change event={:?}", config_resp.clone());
+        tracing::debug!("config change event={:?}", config_resp.clone());
         self.config_data_map
             .insert(config_resp.data_id().clone(), config_resp.clone());
         
