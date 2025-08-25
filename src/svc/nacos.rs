@@ -4,6 +4,7 @@ use anyhow::{Result, anyhow};
 use dashmap::DashMap;
 use nacos_sdk::api::config::ConfigResponse;
 use nacos_sdk::api::constants;
+use nacos_sdk::api::constants::DEFAULT_GROUP;
 use nacos_sdk::api::props::ClientProps;
 use nacos_sdk::api::{
     config::{ConfigChangeListener, ConfigService, ConfigServiceBuilder},
@@ -20,7 +21,7 @@ pub struct NacosNamingAndConfigData {
     pub naming: NamingService,
     pub config: ConfigService,
 
-    state: RwLock<NamingState>,
+    registered_services: RwLock<Vec<RegisteredServiceInfo>>,
 
     pub event_listener: Arc<NacosEventListener>,
 }
@@ -37,26 +38,29 @@ pub struct NacosEventListener {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct NamingState {
+pub struct RegisteredServiceInfo {
     pub service_name: String,
     pub group_name: Option<String>,
-    pub service_instance: Vec<ServiceInstance>,
+    pub service_instance: ServiceInstance,
 }
 
 impl NacosNamingAndConfigData {
-    pub fn get_state(&self) -> NamingState {
-        self.state.read().unwrap().clone()
+    pub fn get_registered_service(&self) -> Vec<RegisteredServiceInfo> {
+        self.registered_services.read().unwrap().clone()
     }
-    pub fn update_state(
+    pub fn add_registered_service(
         &self,
         service_name: String,
         group_name: Option<String>,
-        service_instance: Vec<ServiceInstance>,
+        service_instance: ServiceInstance,
     ) {
-        let mut state = self.state.write().unwrap();
-        state.service_name = service_name;
-        state.group_name = group_name;
-        state.service_instance = service_instance;
+        let mut services = self.registered_services.write().unwrap();
+        let new_state = RegisteredServiceInfo {
+            service_name,
+            group_name,
+            service_instance,
+        };
+        services.push(new_state);
     }
 
     pub fn new(
@@ -120,11 +124,7 @@ impl NacosNamingAndConfigData {
         Ok(NacosNamingAndConfigData {
             naming: naming_service,
             config: config_service,
-            state: RwLock::new(NamingState {
-                service_name: "".to_string(),
-                group_name: None,
-                service_instance: Vec::new(),
-            }),
+            registered_services: RwLock::new(vec![]),
             event_listener: Arc::new(nel),
         })
     }
@@ -169,7 +169,7 @@ impl NacosNamingAndConfigData {
                     service_name.clone(),
                     tmp_ip.clone()
                 );
-                self.update_state(service_name, tmp_group, vec![svc_inst.clone()]);
+                self.add_registered_service(service_name, tmp_group, svc_inst.clone());
                 Ok(vec![svc_inst])
             }
             Err(e) => {
@@ -186,22 +186,27 @@ impl NacosNamingAndConfigData {
 
     /// deregister self from nacos
     pub async fn deregister_service(&self) -> Result<()> {
-        let state = self.get_state();
-        let service_name = state.service_name;
-        let group_name = state.group_name;
-        let svc_inst = state.service_instance;
+        let registered_service = self.get_registered_service();
 
         let mut errors = Vec::new();
         let mut insts = Vec::new();
 
-        if !svc_inst.is_empty() {
-            for inst in svc_inst {
+        if !registered_service.is_empty() {
+            for item in registered_service {
                 match self
                     .naming
-                    .deregister_instance(service_name.clone(), group_name.clone(), inst.clone())
+                    .deregister_instance(
+                        item.service_name.clone(),
+                        item.group_name,
+                        item.service_instance.clone(),
+                    )
                     .await
                 {
-                    Ok(_) => insts.push(format!("{}@{}", service_name.clone(), inst.ip.clone())),
+                    Ok(_) => insts.push(format!(
+                        "{}@{}",
+                        item.service_name,
+                        item.service_instance.ip.clone()
+                    )),
                     Err(e) => errors.push(e.to_string()),
                 }
             }
@@ -219,8 +224,16 @@ impl NacosNamingAndConfigData {
     }
 
     pub async fn subscribe_service(&self, sub_service_name: String) -> Result<()> {
-        let state = self.get_state();
-        let group_name = state.group_name;
+        let state = self.get_registered_service();
+        let group_name = if state.is_empty() {
+            Some(DEFAULT_GROUP.to_string())
+        } else {
+            if let Some(i) = state.get(0) {
+                i.group_name.clone()
+            } else {
+                Some(DEFAULT_GROUP.to_string())
+            }
+        };
         match self
             .naming
             .subscribe(
