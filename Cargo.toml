@@ -1,6 +1,6 @@
 [package]
 name = "pd-rs-common"
-version = "0.1.8"
+version = "0.2.0"
 edition = "2024"
 authors = [
     "intfish123 <intfish@qq.com>",
@@ -22,7 +22,6 @@ tracing-subscriber = { version = "0.3", features = ["default", "env-filter", "fm
 atty = "0.2"  # 用于检测终端是否支持 ANSI 颜色
 toml="0.8"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 anyhow = "1"
 nacos-sdk = { version = "0.5", features = ["default"] }
 local-ip-address = "0.6.3"
