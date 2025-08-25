@@ -6,7 +6,7 @@ use tracing_subscriber::{EnvFilter, Registry, fmt, layer::SubscriberExt};
 
 /// 初始化统一的 tracing 订阅器,
 /// 返回 `WorkerGuard` 确保日志写入器生命周期正确
-pub fn init_tracing() -> (WorkerGuard, WorkerGuard) {
+pub fn init_tracing(max_log_files: Option<u32>) -> (WorkerGuard, WorkerGuard) {
     // 默认日志级别为 "info"，可通过 RUST_LOG 覆盖
     let env_filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
@@ -19,7 +19,7 @@ pub fn init_tracing() -> (WorkerGuard, WorkerGuard) {
         .rotation(tracing_appender::rolling::Rotation::DAILY) // rotate log files once every day
         .filename_prefix("app") // log file names will be prefixed with `myapp.`
         .filename_suffix("log") // log file names will be suffixed with `.log`
-        .max_log_files(2) // max log files
+        .max_log_files(max_log_files.unwrap_or(2) as usize) // max log files
         .build("logs") // try to build an appender that stores log files in `/var/log`
         .expect("initializing rolling file appender failed");
     let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
