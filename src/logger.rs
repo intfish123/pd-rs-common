@@ -14,8 +14,15 @@ pub fn init_tracing() -> (WorkerGuard, WorkerGuard) {
 
     // 输出到控制台（非阻塞）
     let (console_writer, console_guard) = tracing_appender::non_blocking(io::stdout());
-    let (file_writer, file_guard) =
-        tracing_appender::non_blocking(tracing_appender::rolling::daily("logs", "app.log"));
+
+    let file_appender = tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::DAILY) // rotate log files once every day
+        .filename_prefix("app") // log file names will be prefixed with `myapp.`
+        .filename_suffix("log") // log file names will be suffixed with `.log`
+        .max_log_files(2) // max log files
+        .build("logs") // try to build an appender that stores log files in `/var/log`
+        .expect("initializing rolling file appender failed");
+    let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
 
     let console_layer = fmt::layer()
         .with_timer(fmt::time::ChronoLocal::rfc_3339())

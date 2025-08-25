@@ -100,7 +100,7 @@ impl SharedTokenBucket {
                 (diff_seconds * self.fill_rate as f64 / self.shards.len() as f64).round() as u64;
 
             // 获取当前分片的最大容量
-            let shard_cap = self.per_shard_capacity();
+            // let shard_cap = self.per_shard_capacity();
             // println!("shard_cap: {}, need_add_tokens: {}, diff_seconds: {}", shard_cap, need_add_tokens, diff_seconds);
             if need_add_tokens > 0 {
                 if let Ok(_) = shard.last_refill.compare_exchange(
