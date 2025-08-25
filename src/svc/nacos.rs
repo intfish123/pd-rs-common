@@ -1,6 +1,6 @@
 //! nacos discover and configuration
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use dashmap::DashMap;
 use nacos_sdk::api::config::ConfigResponse;
 use nacos_sdk::api::constants;
@@ -69,7 +69,11 @@ impl NacosNamingAndConfigData {
         let mut client_props = ClientProps::new()
             // eg. "127.0.0.1:8848"
             .server_addr(server_addr)
-            .namespace(if namespace.to_lowercase() == "public" {""} else {namespace.as_str()})
+            .namespace(if namespace.to_lowercase() == "public" {
+                ""
+            } else {
+                namespace.as_str()
+            })
             .app_name(app_name.clone());
 
         let mut enable_http_login = false;
@@ -104,8 +108,8 @@ impl NacosNamingAndConfigData {
 
         let (mut config_s, config_r) = async_broadcast::broadcast(100);
         config_s.set_overflow(true);
-        
-        let nel = NacosEventListener{
+
+        let nel = NacosEventListener {
             sub_svc_map: DashMap::default(),
             sub_svc_change_sender: sub_svc_s,
             sub_svc_change_receiver: sub_svc_r,
@@ -125,7 +129,6 @@ impl NacosNamingAndConfigData {
         })
     }
 
-
     /// register self to nacos
     pub async fn register_service(
         &self,
@@ -135,15 +138,14 @@ impl NacosNamingAndConfigData {
         group_name: Option<String>,
         service_metadata: HashMap<String, String>,
     ) -> Result<Vec<ServiceInstance>> {
-        
-        let mut tmp_ip ="127.0.0.1".to_string();
+        let mut tmp_ip = "127.0.0.1".to_string();
         if let Some(ip) = service_ip {
             tmp_ip = ip;
         } else {
             let local_ip = local_ip_address::local_ip()?;
             tmp_ip = local_ip.to_string();
         }
-       
+
         let svc_inst = ServiceInstance {
             ip: tmp_ip.clone(),
             port: service_port,
@@ -151,7 +153,6 @@ impl NacosNamingAndConfigData {
             ..Default::default()
         };
 
-        
         let mut tmp_group = Some(constants::DEFAULT_GROUP.to_string());
         if let Some(gn) = group_name {
             tmp_group = Some(gn);
@@ -164,20 +165,20 @@ impl NacosNamingAndConfigData {
         match _register_inst_ret {
             Ok(_) => {
                 tracing::info!(
-                "register service {}@{} to nacos successfully",
-                service_name.clone(),
-                tmp_ip.clone()
-            );
+                    "register service {}@{} to nacos successfully",
+                    service_name.clone(),
+                    tmp_ip.clone()
+                );
                 self.update_state(service_name, tmp_group, vec![svc_inst.clone()]);
                 Ok(vec![svc_inst])
             }
             Err(e) => {
                 tracing::error!(
-                "failed to register service {}@{} to nacos: {}",
-                service_name.clone(),
-                tmp_ip.to_string(),
-                e
-            );
+                    "failed to register service {}@{} to nacos: {}",
+                    service_name.clone(),
+                    tmp_ip.to_string(),
+                    e
+                );
                 Err(anyhow!(e))
             }
         }
@@ -195,7 +196,8 @@ impl NacosNamingAndConfigData {
 
         if !svc_inst.is_empty() {
             for inst in svc_inst {
-                match self.naming
+                match self
+                    .naming
                     .deregister_instance(service_name.clone(), group_name.clone(), inst.clone())
                     .await
                 {
@@ -207,24 +209,26 @@ impl NacosNamingAndConfigData {
 
         if !errors.is_empty() {
             Err(anyhow!(
-            "failed to deregister instances: {}",
-            errors.join(", ")
-        ))
+                "failed to deregister instances: {}",
+                errors.join(", ")
+            ))
         } else {
             tracing::info!("deregister instances: {}", insts.join(", "));
             Ok(())
         }
     }
 
-
-    pub async fn subscribe_service(
-        &self,
-        sub_service_name: String,
-    ) -> Result<()> {
+    pub async fn subscribe_service(&self, sub_service_name: String) -> Result<()> {
         let state = self.get_state();
         let group_name = state.group_name;
-        match self.naming
-            .subscribe(sub_service_name, group_name, Vec::default(), self.event_listener.clone())
+        match self
+            .naming
+            .subscribe(
+                sub_service_name,
+                group_name,
+                Vec::default(),
+                self.event_listener.clone(),
+            )
             .await
         {
             Ok(_) => Ok(()),
@@ -253,18 +257,12 @@ impl NacosNamingAndConfigData {
         data_id: String,
         group_name: String,
     ) -> Result<()> {
-        self.add_config_listener(data_id, group_name, self.event_listener.clone()).await
+        self.add_config_listener(data_id, group_name, self.event_listener.clone())
+            .await
     }
 
-    pub async fn get_config(
-        &self,
-        data_id: String,
-        group_name: String,
-    ) -> Result<String> {
-        let ret = self
-            .config
-            .get_config(data_id, group_name)
-            .await;
+    pub async fn get_config(&self, data_id: String, group_name: String) -> Result<String> {
+        let ret = self.config.get_config(data_id, group_name).await;
         match ret {
             Ok(config) => Ok(config.content().clone()),
             Err(err) => Err(anyhow!("failed to get config: {}", err)),
@@ -287,7 +285,7 @@ impl ConfigChangeListener for NacosEventListener {
         tracing::debug!("config change event={:?}", config_resp.clone());
         self.config_data_map
             .insert(config_resp.data_id().clone(), config_resp.clone());
-        
+
         let _ = self.config_change_sender.try_broadcast(config_resp);
     }
 }

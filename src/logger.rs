@@ -2,7 +2,7 @@
 
 use std::io;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter, Registry};
+use tracing_subscriber::{EnvFilter, Registry, fmt, layer::SubscriberExt};
 
 /// 初始化统一的 tracing 订阅器,
 /// 返回 `WorkerGuard` 确保日志写入器生命周期正确
@@ -14,7 +14,8 @@ pub fn init_tracing() -> (WorkerGuard, WorkerGuard) {
 
     // 输出到控制台（非阻塞）
     let (console_writer, console_guard) = tracing_appender::non_blocking(io::stdout());
-    let (file_writer, file_guard) = tracing_appender::non_blocking(tracing_appender::rolling::daily("logs", "app.log"));
+    let (file_writer, file_guard) =
+        tracing_appender::non_blocking(tracing_appender::rolling::daily("logs", "app.log"));
 
     let console_layer = fmt::layer()
         .with_timer(fmt::time::ChronoLocal::rfc_3339())
@@ -37,7 +38,10 @@ pub fn init_tracing() -> (WorkerGuard, WorkerGuard) {
         .compact();
 
     // 组合所有 Layers
-    let subscriber = Registry::default().with(env_filter).with(console_layer).with(file_layer);
+    let subscriber = Registry::default()
+        .with(env_filter)
+        .with(console_layer)
+        .with(file_layer);
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("Failed to set global tracing subscriber");

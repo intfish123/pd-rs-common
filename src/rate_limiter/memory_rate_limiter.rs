@@ -5,8 +5,8 @@
 use crate::rate_limiter::RateLimiter;
 use crossbeam::utils::CachePadded;
 use dashmap::DashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// 令牌桶位结构体
 #[derive(Default)]
@@ -124,7 +124,7 @@ impl SharedTokenBucket {
     /// 尝试获取指定数量的令牌
     pub fn try_acquire(&self, seed: String, tokens: u64) -> bool {
         let shards = &self.shards;
-        
+
         let shard;
         if shards.len() == 1 {
             shard = &shards[0];

@@ -1,6 +1,6 @@
 //! 加载配置模块
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use serde::de::DeserializeOwned;
 
 pub trait LoadConfig: Sized + DeserializeOwned {
