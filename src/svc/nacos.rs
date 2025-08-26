@@ -137,7 +137,7 @@ impl NacosNamingAndConfigData {
         service_ip: Option<String>,
         group_name: Option<String>,
         service_metadata: HashMap<String, String>,
-    ) -> Result<Vec<ServiceInstance>> {
+    ) -> Result<ServiceInstance> {
         let mut tmp_ip = "127.0.0.1".to_string();
         if let Some(ip) = service_ip {
             tmp_ip = ip;
@@ -167,16 +167,16 @@ impl NacosNamingAndConfigData {
                 tracing::info!(
                     "register service {}@{} to nacos successfully",
                     service_name.clone(),
-                    tmp_ip.clone()
+                    tmp_ip
                 );
                 self.add_registered_service(service_name, tmp_group, svc_inst.clone());
-                Ok(vec![svc_inst])
+                Ok(svc_inst)
             }
             Err(e) => {
                 tracing::error!(
                     "failed to register service {}@{} to nacos: {}",
                     service_name.clone(),
-                    tmp_ip.to_string(),
+                    tmp_ip,
                     e
                 );
                 Err(anyhow!(e))
