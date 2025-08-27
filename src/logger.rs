@@ -1,12 +1,54 @@
 //! 日志记录模块
 
 use std::io;
+use std::fmt::Write;
+use tracing::{Event, Subscriber};
+use tracing::field::{Field, Visit};
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{EnvFilter, Registry, fmt, layer::SubscriberExt};
+use tracing_subscriber::layer::Context;
+use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter, Layer, Registry};
+
+pub struct StringVisitor<'a> {
+    pub string: &'a mut String,
+}
+
+impl<'a> Visit for StringVisitor<'a> {
+    fn record_debug(&mut self, _field: &Field, value: &dyn std::fmt::Debug) {
+        // write!(self.string, "{} = {:?}; ", field.name(), value).unwrap();
+        let _ = write!(self.string, "{:?}", value);
+    }
+}
+
+pub struct CustomLayer {
+    pub callback: fn(&Event<'_>),
+}
+
+impl CustomLayer {
+    pub fn new(f: fn(_event: &Event<'_>)) -> Self {
+        Self { callback: f }
+    }
+}
+impl Default for CustomLayer {
+    fn default() -> Self {
+        CustomLayer::new(|_| {})
+    }
+}
+
+impl<S> Layer<S> for CustomLayer
+where
+    S: Subscriber,
+{
+    fn on_event(&self, _event: &Event<'_>, _ctx: Context<'_, S>) {
+        (self.callback)(_event);
+    }
+}
 
 /// 初始化统一的 tracing 订阅器,
 /// 返回 `WorkerGuard` 确保日志写入器生命周期正确
-pub fn init_tracing(max_log_files: Option<u32>) -> (WorkerGuard, WorkerGuard) {
+pub fn init_tracing(
+    max_log_files: Option<u32>,
+    custom_hook: Option<fn(&Event<'_>)>,
+) -> (WorkerGuard, WorkerGuard) {
     // 默认日志级别为 "info"，可通过 RUST_LOG 覆盖
     let env_filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
@@ -44,14 +86,22 @@ pub fn init_tracing(max_log_files: Option<u32>) -> (WorkerGuard, WorkerGuard) {
         .with_thread_names(false)
         .compact();
 
+    let custom_layer = if let Some(fn_hook) = custom_hook {
+        CustomLayer::new(fn_hook)
+    } else {
+        CustomLayer::default()
+    };
+
     // 组合所有 Layers
     let subscriber = Registry::default()
         .with(env_filter)
         .with(console_layer)
-        .with(file_layer);
+        .with(file_layer)
+        .with(custom_layer);
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("Failed to set global tracing subscriber");
+
 
     // 返回 guard 避免日志写入器被提前释放
     (console_guard, file_guard)
