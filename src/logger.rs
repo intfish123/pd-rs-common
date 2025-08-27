@@ -1,12 +1,12 @@
 //! 日志记录模块
 
-use std::io;
 use std::fmt::Write;
-use tracing::{Event, Subscriber};
+use std::io;
 use tracing::field::{Field, Visit};
+use tracing::{Event, Subscriber};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::layer::Context;
-use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter, Layer, Registry};
+use tracing_subscriber::{EnvFilter, Layer, Registry, fmt, layer::SubscriberExt};
 
 pub struct StringVisitor<'a> {
     pub string: &'a mut String,
@@ -101,7 +101,6 @@ pub fn init_tracing(
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("Failed to set global tracing subscriber");
-
 
     // 返回 guard 避免日志写入器被提前释放
     (console_guard, file_guard)
